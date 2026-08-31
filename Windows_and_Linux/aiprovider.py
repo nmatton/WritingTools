@@ -361,6 +361,8 @@ class GeminiProvider(AIProvider):
                     # quality. Capped at 20 free requests/day per the model's free
                     # tier.
                     ("⭐ Gemini Flash Latest (very fast | only 20 free uses/day)", "gemini-flash-latest"),
+                    ("Gemini 3.6 Flash (fast)", "gemini-3.6-flash"),
+                    ("Gemini 3.5 Flash (fast)", "gemini-3.5-flash"),
                     # Gemma 4 models are unlimited on the free tier but noticeably
                     # slower (8–15s typical) since they run on different
                     # infrastructure.
@@ -396,19 +398,22 @@ class GeminiProvider(AIProvider):
         #   thinking on Gemma 4 is binary and "you enable it in the API by setting
         #   the thinking level to 'high'". So omitting thinking_config keeps
         #   Gemma 4 in its default-off state.
-        # • Do not use "minimal" here. It is accepted by some Gemini 3 models,
-        #   but rejected by Gemini 2.5 and newer Flash aliases (for example,
-        #   gemini-flash-latest when it resolves to Gemini 3.7 Flash). "low" is
-        #   the lowest level supported across the Gemini models offered here and
-        #   by common custom Gemini model choices.
-        is_gemma = "gemma" in (self.model_name or "").lower()
+        # • Gemini 3.5 Flash and 3.6 Flash explicitly support "minimal", so
+        #   use it for their lowest-latency setting. Do not use it for the
+        #   rolling gemini-flash-latest alias: it can resolve to a newer model
+        #   such as Gemini 3.7 Flash, which rejects "minimal". "low" remains
+        #   the safe default for all other Gemini and custom model choices.
+        model_name = (self.model_name or "").lower()
+        is_gemma = "gemma" in model_name
+        supports_minimal_thinking = model_name in {"gemini-3.5-flash", "gemini-3.6-flash"}
         kwargs = {
             "system_instruction": system_instruction,
             "safety_settings": self._SAFETY_SETTINGS,
             "max_output_tokens": 1000,
         }
         if not is_gemma:
-            kwargs["thinking_config"] = genai_types.ThinkingConfig(thinking_level="low")
+            thinking_level = "minimal" if supports_minimal_thinking else "low"
+            kwargs["thinking_config"] = genai_types.ThinkingConfig(thinking_level=thinking_level)
         return genai_types.GenerateContentConfig(**kwargs)
 
     @staticmethod
